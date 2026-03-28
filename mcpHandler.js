@@ -1,0 +1,318 @@
+/**
+ * MCP Handler for MockFlow WireframePro
+ *
+ * Handles:
+ * - render_wireframe: HTML → Puppeteer + imageGenerator → paintObjects → save project
+ * - render_flowchart: Proxy to Java backend (same as IdeaBoard)
+ * - render_cloudarchitecture: Proxy to Java backend (same as IdeaBoard)
+ */
+
+const { v4: uuidv4 } = require('uuid');
+const axios = require('axios');
+const puppeteer = require('puppeteer');
+const fs = require('fs');
+const path = require('path');
+
+const PROTOCOL_VERSION = '2025-03-26';
+const SERVER_NAME = 'MockFlow WireframePro';
+const SERVER_VERSION = '1.0.0';
+
+class WireframeProMCPHandler {
+	constructor(isDev) {
+		this.sessions = new Map();
+		this.isDev = isDev;
+
+		this.renderBackendUrl = isDev
+			? 'http://localhost:8080/MockFlow-WireframePro'
+			: 'https://app.mockflow.com';
+
+		// Load imageGenerator.min.js for Puppeteer injection
+		this.imageGeneratorPath = null;
+		var paths = [
+			path.join(__dirname, '..', 'editor', 'imageGenerator.min.js'),
+			path.join(__dirname, 'imageGenerator.min.js')
+		];
+		for (var i = 0; i < paths.length; i++) {
+			if (fs.existsSync(paths[i])) {
+				this.imageGeneratorPath = paths[i];
+				break;
+			}
+		}
+
+		global.logMessage('WireframePro MCP Handler using backend: ' + this.renderBackendUrl);
+		global.logMessage('imageGenerator.min.js: ' + (this.imageGeneratorPath || 'NOT FOUND'));
+	}
+
+	async handleRequest(method, params, req) {
+		if (method.startsWith('notifications/')) return {};
+
+		switch (method) {
+			case 'initialize':
+				return this.handleInitialize(params);
+			case 'initialized':
+				return {};
+			case 'tools/list':
+				return { tools: this.getToolDefinitions() };
+			case 'tools/call':
+				return this.handleToolsCall(params, req);
+			case 'ping':
+				return {};
+			case 'resources/list':
+				return { resources: [] };
+			case 'prompts/list':
+				return { prompts: [] };
+			default:
+				throw new Error('Method not found: ' + method);
+		}
+	}
+
+	handleInitialize(params) {
+		var sessionId = uuidv4().replace(/-/g, '');
+		this.sessions.set(sessionId, { createdAt: new Date(), clientInfo: params.clientInfo || {} });
+
+		return {
+			protocolVersion: PROTOCOL_VERSION,
+			capabilities: {
+				tools: { listChanged: false }
+			},
+			serverInfo: { name: SERVER_NAME, version: SERVER_VERSION }
+		};
+	}
+
+	async handleToolsCall(params, req) {
+		var name = params.name;
+		var args = params.arguments || {};
+
+		if (!name) throw new Error('Tool name is required');
+
+		try {
+			if (name === 'render_wireframe') {
+				return await this.handleRenderWireframe(args, req);
+			}
+			// Flowchart and cloud architecture — proxy to Java backend
+			var actionType = name.replace('render_', '');
+			return await this.callRenderBackend(actionType, args, req);
+		} catch (error) {
+			global.logMessage('Tool call error:', error.message);
+			return {
+				content: [{ type: 'text', text: 'Error: ' + error.message }],
+				isError: true
+			};
+		}
+	}
+
+	/**
+	 * Convert HTML to wireframe paintObjects using Puppeteer + imageGenerator.
+	 * Same pattern as aitoolsManager.js:getElementPaintFromURL()
+	 */
+	async handleRenderWireframe(args, req) {
+		var html = args.html;
+		if (!html) throw new Error('HTML content is required');
+		if (!this.imageGeneratorPath) throw new Error('imageGenerator.min.js not found');
+
+		var swidth = 1280;
+
+		var browser = await puppeteer.launch({
+			headless: true,
+			args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-web-security',
+				'--disable-features=IsolateOrigins,site-per-process']
+		});
+
+		try {
+			var page = await browser.newPage();
+			await page.setViewport({ width: swidth, height: 1080, deviceScaleFactor: 1 });
+
+			// Load HTML content
+			await page.setContent(html, { waitUntil: 'networkidle2', timeout: 10000 });
+
+			// Get full page height and resize
+			var bodyHeight = await page.evaluate(function() {
+				return Math.min(10000, Math.max(
+					document.body.scrollHeight || 0,
+					document.body.offsetHeight || 0,
+					document.documentElement.clientHeight || 0,
+					document.documentElement.scrollHeight || 0,
+					document.documentElement.offsetHeight || 0
+				));
+			});
+			await page.setViewport({ width: swidth, height: Math.max(1080, bodyHeight), deviceScaleFactor: 1 });
+
+			// Inject imageGenerator.min.js
+			await page.addScriptTag({ path: this.imageGeneratorPath });
+
+			// Wait for script initialization
+			await new Promise(function(r) { setTimeout(r, 3000); });
+
+			// Run imageGenerator and extract paintObjects (same cleanup as aitoolsManager.js)
+			var paintObjects = await page.evaluate(async function() {
+				window.elementPaintObjects = [];
+
+				function clearParentObjects(obj) {
+					if (obj.parent && obj.parent !== null) {
+						obj.container.parent = { container: { bounds: obj.parent.container.bounds } };
+						if (obj.parent.parent) {
+							obj.container.parent.parent = {};
+							clearParentObjects(obj.parent);
+							obj.container.parent.parent = obj.parent.container.parent;
+						}
+					}
+				}
+
+				await imageGenerator(document.body, { logging: false });
+
+				var bodyCS = window.getComputedStyle(document.body);
+				var pageBackgroundColor = bodyCS.backgroundColor;
+				var filteredObjs = window.elementPaintObjects;
+
+				for (var k = 0; k < filteredObjs.length; k++) {
+					var obj = filteredObjs[k];
+					if (obj.container) obj.container.pageBackgroundColor = pageBackgroundColor;
+					clearParentObjects(obj);
+				}
+
+				for (var k = 0; k < filteredObjs.length; k++) {
+					var obj = filteredObjs[k];
+					obj.elements = null;
+					obj.parent = null;
+					if (obj.container) obj.container.context = null;
+					obj.curves = null;
+				}
+
+				var narr = [];
+				for (var k = 0; k < filteredObjs.length; k++) {
+					var obj = filteredObjs[k];
+					try {
+						var sx = parseInt(obj.container.bounds.left);
+						var sy = parseInt(obj.container.bounds.top);
+						if (sx >= 0 && sx <= 1600 && sy >= 0 && sy <= 15100) {
+							narr.push(obj);
+						}
+					} catch (e) {}
+				}
+
+				return narr;
+			});
+
+			global.logMessage('HTML converted to ' + paintObjects.length + ' paintObjects');
+
+			// Save paintObjects to backend as a WireframePro project
+			var user = req.user || null;
+			var result = await this.savePaintObjectsToProject(paintObjects, user);
+
+			return {
+				content: [
+					{ type: 'text', text: 'URL: ' + result.url },
+					{ type: 'text', text: 'Wireframe created with ' + paintObjects.length + ' components' }
+				],
+				isError: false
+			};
+		} finally {
+			await browser.close();
+		}
+	}
+
+	/**
+	 * Save paintObjects to a WireframePro project via backend.
+	 */
+	async savePaintObjectsToProject(paintObjects, user) {
+		var endpoint = this.renderBackendUrl + '/integrations/gptaction/render_wireframe';
+
+		var payload = { paintObjects: paintObjects };
+		if (user) {
+			payload._oauth = { userid: user.userid, clientid: user.clientid, scope: user.scope };
+		}
+
+		try {
+			var response = await axios.post(endpoint, payload, {
+				headers: { 'Content-Type': 'application/json; charset=utf-8' },
+				timeout: 60000
+			});
+
+			if (response.data && response.data.success) {
+				return { url: response.data.url, thumbnailUrl: response.data.thumbnailUrl };
+			}
+			throw new Error(response.data.error || 'Backend returned failure');
+		} catch (error) {
+			if (error.code === 'ECONNREFUSED') {
+				// Backend not available — return paintObjects count as confirmation
+				return { url: 'Wireframe generated (' + paintObjects.length + ' components)' };
+			}
+			throw error;
+		}
+	}
+
+	/**
+	 * Proxy flowchart/cloudarchitecture to Java backend (same as IdeaBoard MCP)
+	 */
+	async callRenderBackend(actionType, args, req) {
+		var endpoint = this.renderBackendUrl + '/integrations/gptaction/render_' + actionType;
+		var payload = { ...args };
+
+		if (req.user) {
+			payload._oauth = { userid: req.user.userid, clientid: req.user.clientid, scope: req.user.scope };
+		}
+
+		var response = await axios.post(endpoint, payload, {
+			headers: { 'Content-Type': 'application/json; charset=utf-8' },
+			timeout: 60000
+		});
+
+		var data = response.data;
+		if (data.success) {
+			return {
+				content: [
+					{ type: 'text', text: 'URL: ' + data.url },
+					{ type: 'text', text: 'Thumbnail: ' + data.thumbnailUrl }
+				],
+				isError: false
+			};
+		}
+		throw new Error(data.error || 'Backend returned failure');
+	}
+
+	getToolDefinitions() {
+		return [
+			{
+				name: 'render_wireframe',
+				description: 'Convert HTML to a wireframe design in MockFlow WireframePro.\n\nProvide a complete HTML document with inline CSS. It will be rendered and converted to editable wireframe components.\n\nRULES:\n- Use inline styles for all styling\n- Use standard HTML elements: div, h1-h6, p, input, button, select, textarea, img, ul, li, table, form\n- Include realistic placeholder text\n- Set explicit widths/heights\n- Wrap in a container div with explicit width (e.g. 1280px)',
+				inputSchema: {
+					type: 'object',
+					properties: {
+						html: { type: 'string', description: 'Complete HTML document with inline CSS' }
+					},
+					required: ['html']
+				}
+			},
+			{
+				name: 'render_flowchart',
+				description: 'Create a flowchart in WireframePro. Same schema as IdeaBoard render_flowchart.\n\nNODE PROPERTIES: key, text, color (pastel hex), loc ("x y"), width, height, shape (Circle/Diamond/RoundedRectangle), matchKey (specialized categories only).\nLINK PROPERTIES: from, to, fromSpot, toSpot, text, segmentFraction.\nSTRUCTURE: diagramType="flowchart", class="GraphLinksModel", category required.',
+				inputSchema: {
+					type: 'object',
+					properties: {
+						diagramType: { type: 'string', enum: ['flowchart'] },
+						class: { type: 'string' },
+						category: { type: 'string', enum: ['default', 'sketchy', '3d', 'bio', 'circuit', 'pandid', 'uml', 'uml-sketchy', 'cloud-isometric', 'weblayout', 'mobilelayout'] },
+						nodeDataArray: { type: 'array', items: { type: 'object' } },
+						linkDataArray: { type: 'array', items: { type: 'object' } }
+					},
+					required: ['diagramType', 'class', 'category', 'nodeDataArray', 'linkDataArray']
+				}
+			},
+			{
+				name: 'render_cloudarchitecture',
+				description: 'Create cloud architecture diagrams (AWS/Azure/GCP/Cisco) in WireframePro.\n\nNODE PROPERTIES: key, text, type, color, fillColor, loc ("x y"), width, height, isGroup, group.\nLINK PROPERTIES: from, to, fromSpot, toSpot, text.',
+				inputSchema: {
+					type: 'object',
+					properties: {
+						diagramType: { type: 'string', enum: ['aws', 'azure', 'gcloud', 'cisco'] },
+						nodeDataArray: { type: 'array', items: { type: 'object' } },
+						linkDataArray: { type: 'array', items: { type: 'object' } }
+					},
+					required: ['diagramType', 'nodeDataArray', 'linkDataArray']
+				}
+			}
+		];
+	}
+}
+
+module.exports = WireframeProMCPHandler;

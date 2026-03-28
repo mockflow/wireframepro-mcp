@@ -1,0 +1,44 @@
+{
+  "name": "@mockflow/wireframepro-mcp",
+  "version": "1.0.0",
+  "description": "Local MCP server for MockFlow WireframePro - create wireframes from HTML via Claude Code, Cursor, VS Code Copilot",
+  "main": "lib/server.js",
+  "bin": {
+    "mockflow-wireframepro-mcp": "./bin/mockflow-wireframepro-mcp.js"
+  },
+  "scripts": {
+    "start": "node bin/mockflow-wireframepro-mcp.js",
+    "prepublish": "cp ../wireframepro-mcp/mcpHandler.js ./mcpHandler.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "uuid": "^9.0.0",
+    "axios": "^1.6.0",
+    "body-parser": "^1.20.2",
+    "puppeteer": "^21.0.0",
+    "open": "^9.1.0"
+  },
+  "files": [
+    "bin/",
+    "lib/",
+    "mcpHandler.js",
+    "wireframepro-mcp-component-registry.js",
+    "README.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "mcp", "claude", "claude-code", "cursor", "copilot",
+    "mockflow", "wireframepro", "wireframe", "html-to-wireframe"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mockflow/wireframepro-mcp.git"
+  },
+  "homepage": "https://github.com/mockflow/wireframepro-mcp#readme",
+  "bugs": {
+    "url": "https://github.com/mockflow/wireframepro-mcp/issues"
+  },
+  "author": "MockFlow (https://mockflow.com)",
+  "license": "MIT"
+}
