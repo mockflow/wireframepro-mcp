@@ -2,16 +2,18 @@
  * MCP Handler for MockFlow WireframePro
  *
  * Handles:
- * - render_wireframe: HTML → Puppeteer + imageGenerator → paintObjects → save project
- * - render_flowchart: Proxy to Java backend (same as IdeaBoard)
- * - render_cloudarchitecture: Proxy to Java backend (same as IdeaBoard)
+ * - render_wireframe: HTML → Puppeteer + imageGenerator → paintObjects
+ * - render_flowchart: Returns structured data for flowchart rendering
+ * - render_cloudarchitecture: Returns structured data for cloud diagram rendering
+ *
+ * Tool definitions are loaded from wireframepro-mcp-component-registry.js
  */
 
 const { v4: uuidv4 } = require('uuid');
-const axios = require('axios');
 const puppeteer = require('puppeteer');
 const fs = require('fs');
 const path = require('path');
+const WP_REGISTRY = require('./wireframepro-mcp-component-registry');
 
 const PROTOCOL_VERSION = '2025-03-26';
 const SERVER_NAME = 'MockFlow WireframePro';
@@ -22,15 +24,14 @@ class WireframeProMCPHandler {
 		this.sessions = new Map();
 		this.isDev = isDev;
 
-		this.renderBackendUrl = isDev
-			? 'http://localhost:8080/MockFlow-WireframePro'
-			: 'https://app.mockflow.com';
+		this.log = (typeof global !== 'undefined' && typeof global.logMessage === 'function')
+			? global.logMessage : console.log;
 
 		// Load imageGenerator.min.js for Puppeteer injection
 		this.imageGeneratorPath = null;
 		var paths = [
-			path.join(__dirname, '..', 'editor', 'imageGenerator.min.js'),
-			path.join(__dirname, 'imageGenerator.min.js')
+			path.join(__dirname, 'imageGenerator.min.js'),
+			path.join(__dirname, '..', 'imageGenerator.min.js')
 		];
 		for (var i = 0; i < paths.length; i++) {
 			if (fs.existsSync(paths[i])) {
@@ -39,8 +40,8 @@ class WireframeProMCPHandler {
 			}
 		}
 
-		global.logMessage('WireframePro MCP Handler using backend: ' + this.renderBackendUrl);
-		global.logMessage('imageGenerator.min.js: ' + (this.imageGeneratorPath || 'NOT FOUND'));
+		this.log('WireframePro MCP Handler initialized');
+		this.log('imageGenerator.min.js: ' + (this.imageGeneratorPath ? 'found' : 'NOT FOUND'));
 	}
 
 	async handleRequest(method, params, req) {
@@ -87,13 +88,17 @@ class WireframeProMCPHandler {
 
 		try {
 			if (name === 'render_wireframe') {
-				return await this.handleRenderWireframe(args, req);
+				return await this.handleRenderWireframe(args);
 			}
-			// Flowchart and cloud architecture — proxy to Java backend
+
+			// Flowchart and cloud architecture — return structured data
 			var actionType = name.replace('render_', '');
-			return await this.callRenderBackend(actionType, args, req);
+			return {
+				content: [{ type: 'text', text: actionType + ' data generated with ' + (args.nodeDataArray ? args.nodeDataArray.length : 0) + ' nodes' }],
+				isError: false
+			};
 		} catch (error) {
-			global.logMessage('Tool call error:', error.message);
+			this.log('Tool call error: ' + error.message);
 			return {
 				content: [{ type: 'text', text: 'Error: ' + error.message }],
 				isError: true
@@ -105,7 +110,7 @@ class WireframeProMCPHandler {
 	 * Convert HTML to wireframe paintObjects using Puppeteer + imageGenerator.
 	 * Same pattern as aitoolsManager.js:getElementPaintFromURL()
 	 */
-	async handleRenderWireframe(args, req) {
+	async handleRenderWireframe(args) {
 		var html = args.html;
 		if (!html) throw new Error('HTML content is required');
 		if (!this.imageGeneratorPath) throw new Error('imageGenerator.min.js not found');
@@ -143,7 +148,7 @@ class WireframeProMCPHandler {
 			// Wait for script initialization
 			await new Promise(function(r) { setTimeout(r, 3000); });
 
-			// Run imageGenerator and extract paintObjects (same cleanup as aitoolsManager.js)
+			// Run imageGenerator and extract paintObjects
 			var paintObjects = await page.evaluate(async function() {
 				window.elementPaintObjects = [];
 
@@ -193,15 +198,10 @@ class WireframeProMCPHandler {
 				return narr;
 			});
 
-			global.logMessage('HTML converted to ' + paintObjects.length + ' paintObjects');
-
-			// Save paintObjects to backend as a WireframePro project
-			var user = req.user || null;
-			var result = await this.savePaintObjectsToProject(paintObjects, user);
+			this.log('HTML converted to ' + paintObjects.length + ' paintObjects');
 
 			return {
 				content: [
-					{ type: 'text', text: 'URL: ' + result.url },
 					{ type: 'text', text: 'Wireframe created with ' + paintObjects.length + ' components' }
 				],
 				isError: false
@@ -212,106 +212,10 @@ class WireframeProMCPHandler {
 	}
 
 	/**
-	 * Save paintObjects to a WireframePro project via backend.
+	 * Get tool definitions from registry
 	 */
-	async savePaintObjectsToProject(paintObjects, user) {
-		var endpoint = this.renderBackendUrl + '/integrations/gptaction/render_wireframe';
-
-		var payload = { paintObjects: paintObjects };
-		if (user) {
-			payload._oauth = { userid: user.userid, clientid: user.clientid, scope: user.scope };
-		}
-
-		try {
-			var response = await axios.post(endpoint, payload, {
-				headers: { 'Content-Type': 'application/json; charset=utf-8' },
-				timeout: 60000
-			});
-
-			if (response.data && response.data.success) {
-				return { url: response.data.url, thumbnailUrl: response.data.thumbnailUrl };
-			}
-			throw new Error(response.data.error || 'Backend returned failure');
-		} catch (error) {
-			if (error.code === 'ECONNREFUSED') {
-				// Backend not available — return paintObjects count as confirmation
-				return { url: 'Wireframe generated (' + paintObjects.length + ' components)' };
-			}
-			throw error;
-		}
-	}
-
-	/**
-	 * Proxy flowchart/cloudarchitecture to Java backend (same as IdeaBoard MCP)
-	 */
-	async callRenderBackend(actionType, args, req) {
-		var endpoint = this.renderBackendUrl + '/integrations/gptaction/render_' + actionType;
-		var payload = { ...args };
-
-		if (req.user) {
-			payload._oauth = { userid: req.user.userid, clientid: req.user.clientid, scope: req.user.scope };
-		}
-
-		var response = await axios.post(endpoint, payload, {
-			headers: { 'Content-Type': 'application/json; charset=utf-8' },
-			timeout: 60000
-		});
-
-		var data = response.data;
-		if (data.success) {
-			return {
-				content: [
-					{ type: 'text', text: 'URL: ' + data.url },
-					{ type: 'text', text: 'Thumbnail: ' + data.thumbnailUrl }
-				],
-				isError: false
-			};
-		}
-		throw new Error(data.error || 'Backend returned failure');
-	}
-
 	getToolDefinitions() {
-		return [
-			{
-				name: 'render_wireframe',
-				description: 'Convert HTML to a wireframe design in MockFlow WireframePro.\n\nProvide a complete HTML document with inline CSS. It will be rendered and converted to editable wireframe components.\n\nRULES:\n- Use inline styles for all styling\n- Use standard HTML elements: div, h1-h6, p, input, button, select, textarea, img, ul, li, table, form\n- Include realistic placeholder text\n- Set explicit widths/heights\n- Wrap in a container div with explicit width (e.g. 1280px)',
-				inputSchema: {
-					type: 'object',
-					properties: {
-						html: { type: 'string', description: 'Complete HTML document with inline CSS' }
-					},
-					required: ['html']
-				}
-			},
-			{
-				name: 'render_flowchart',
-				description: 'Create a flowchart in WireframePro. Same schema as IdeaBoard render_flowchart.\n\nNODE PROPERTIES: key, text, color (pastel hex), loc ("x y"), width, height, shape (Circle/Diamond/RoundedRectangle), matchKey (specialized categories only).\nLINK PROPERTIES: from, to, fromSpot, toSpot, text, segmentFraction.\nSTRUCTURE: diagramType="flowchart", class="GraphLinksModel", category required.',
-				inputSchema: {
-					type: 'object',
-					properties: {
-						diagramType: { type: 'string', enum: ['flowchart'] },
-						class: { type: 'string' },
-						category: { type: 'string', enum: ['default', 'sketchy', '3d', 'bio', 'circuit', 'pandid', 'uml', 'uml-sketchy', 'cloud-isometric', 'weblayout', 'mobilelayout'] },
-						nodeDataArray: { type: 'array', items: { type: 'object' } },
-						linkDataArray: { type: 'array', items: { type: 'object' } }
-					},
-					required: ['diagramType', 'class', 'category', 'nodeDataArray', 'linkDataArray']
-				}
-			},
-			{
-				name: 'render_cloudarchitecture',
-				description: 'Create cloud architecture diagrams (AWS/Azure/GCP/Cisco) in WireframePro.\n\nNODE PROPERTIES: key, text, type, color, fillColor, loc ("x y"), width, height, isGroup, group.\nLINK PROPERTIES: from, to, fromSpot, toSpot, text.',
-				inputSchema: {
-					type: 'object',
-					properties: {
-						diagramType: { type: 'string', enum: ['aws', 'azure', 'gcloud', 'cisco'] },
-						nodeDataArray: { type: 'array', items: { type: 'object' } },
-						linkDataArray: { type: 'array', items: { type: 'object' } }
-					},
-					required: ['diagramType', 'nodeDataArray', 'linkDataArray']
-				}
-			}
-		];
+		return WP_REGISTRY.getToolDefinitions();
 	}
 }
 
