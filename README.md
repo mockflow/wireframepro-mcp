@@ -240,6 +240,13 @@ Ensure you have a valid login and internet connection. The server needs to reach
 "Create an Azure architecture diagram for a web app with App Service and SQL Database"
 ```
 
+## Links
+
+- **npm:** [npmjs.com/package/@mockflow/wireframepro-mcp](https://www.npmjs.com/package/@mockflow/wireframepro-mcp)
+- **GitHub:** [github.com/mockflow/wireframepro-mcp](https://github.com/mockflow/wireframepro-mcp)
+- **MockFlow:** [mockflow.com](https://mockflow.com)
+- **IdeaBoard MCP:** [@mockflow/ideaboard-mcp](https://www.npmjs.com/package/@mockflow/ideaboard-mcp) — flowcharts, kanban, mind maps, and 12+ visualizations
+
 ## Contributing
 
 Issues and pull requests are welcome at [github.com/mockflow/wireframepro-mcp](https://github.com/mockflow/wireframepro-mcp).
