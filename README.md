@@ -7,6 +7,8 @@ Local [MCP](https://modelcontextprotocol.io/) server for [MockFlow WireframePro]
 
 Works with **Claude Code**, **Cursor**, **VS Code Copilot**, **Codex**, and any MCP-compatible client.
 
+> **Note:** MCP servers may not provide the full experience for certain types of generation involving images, AI art, or complex designs. For the best seamless experience, use the [Mida AI agent](https://mockflow.com) inside the MockFlow editor.
+
 ## Quick Start
 
 ### 1. Install

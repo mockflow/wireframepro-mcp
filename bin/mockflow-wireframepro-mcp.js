@@ -14,20 +14,7 @@ var args = process.argv.slice(2);
 var command = args[0];
 
 if (command === 'login') {
-	// Reuse IdeaBoard auth module (same credentials)
-	var authPath;
-	try { authPath = require.resolve('../../ideaboard-mcp-local/lib/auth'); } catch(e) {}
-	if (!authPath) {
-		try { authPath = require.resolve('@mockflow/ideaboard-mcp/lib/auth'); } catch(e) {}
-	}
-	if (authPath) {
-		require(authPath).login();
-	} else {
-		console.log('');
-		console.log('Run "mockflow-mcp login" from @mockflow/ideaboard-mcp to set up credentials.');
-		console.log('WireframePro MCP uses the same credentials as IdeaBoard MCP.');
-		console.log('');
-	}
+	require('../lib/auth').login();
 } else if (command === '--help' || command === '-h' || command === 'help') {
 	console.log('');
 	console.log('MockFlow WireframePro MCP - Local MCP Server');
