@@ -1,67 +1,112 @@
-# MockFlow WireframePro MCP
+# MockFlow WireframePro MCP Server
 
-Convert HTML to editable wireframes, create flowcharts, and design cloud architecture diagrams — all from AI-powered IDE clients (Claude Code, Cursor, VS Code Copilot).
+[![npm version](https://img.shields.io/npm/v/@mockflow/wireframepro-mcp.svg)](https://www.npmjs.com/package/@mockflow/wireframepro-mcp)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-## Three Ways to Use
+Local [MCP](https://modelcontextprotocol.io/) server for [MockFlow WireframePro](https://mockflow.com). Convert HTML to editable wireframes, create flowcharts, and design cloud architecture diagrams — directly from AI-powered coding tools.
 
-### Option 1: MockFlow Desktop App (Recommended)
+Works with **Claude Code**, **Cursor**, **VS Code Copilot**, **Codex**, and any MCP-compatible client.
 
-Built-in local MCP server. Wireframes render **directly on your open canvas** — no server, no URL.
+## Quick Start
 
-```
-Claude Code → generates HTML → MCP converts to wireframe → appears on your canvas
-```
-
-**Setup:**
-1. Open MockFlow Desktop App → open a WireframePro project
-2. Add to Claude Code:
-   ```bash
-   claude mcp add --transport http -s user mockflow-wireframepro http://localhost:21194/mcp
-   ```
-3. Ask: *"Create a wireframe for a login page"*
-
-### Option 2: Standalone CLI (No Desktop App)
-
-Runs locally with Puppeteer for HTML→wireframe conversion. Creates projects via MockFlow cloud.
+### 1. Install
 
 ```bash
 npm install -g @mockflow/wireframepro-mcp
-mockflow-wireframepro-mcp login    # One-time (shares credentials with IdeaBoard)
-mockflow-wireframepro-mcp          # Start server on port 21194
 ```
 
-### Option 3: Remote MCP (Claude.ai / ChatGPT)
+Or run without installing:
 
-Cloud-hosted at `app.mockflow.com/wireframepro/mcp`. Add as a connector in Claude.ai Settings.
+```bash
+npx @mockflow/wireframepro-mcp
+```
 
-### Comparison
+### 2. Authenticate
 
-| | Desktop App | Standalone CLI | Remote |
-|---|---|---|---|
-| **Rendering** | Direct on canvas | Puppeteer → cloud save | Puppeteer → cloud save |
-| **Output** | Components on page | URL to open | URL + thumbnail |
-| **Auth** | Auto (logged in) | API key | OAuth |
-| **Speed** | ~4s | ~5s + network | ~5s + network |
-| **Backend** | None | app.mockflow.com | app.mockflow.com |
+```bash
+mockflow-wireframepro-mcp login
+```
 
-## Client Setup
+This opens your browser to MockFlow's login page. Log in with your MockFlow account and authorize access. The token is saved automatically to `~/.mockflow/credentials.json` (one-time setup).
 
-### Claude Code
+### 3. Start the Server
+
+```bash
+mockflow-wireframepro-mcp
+```
+
+You'll see:
+
+```
+MockFlow WireframePro - Local MCP Server
+========================================
+User: you@example.com
+
+MCP server running on http://localhost:21194/mcp
+
+Add to your AI client:
+
+  Claude Code:
+    claude mcp add --transport http -s user mockflow-wireframepro http://localhost:21194/mcp
+```
+
+### 4. Connect Your AI Client
+
+#### Claude Code
+
 ```bash
 claude mcp add --transport http -s user mockflow-wireframepro http://localhost:21194/mcp
 ```
 
-### Cursor
+#### Cursor
+
+Settings > Cursor Settings > Tools & MCP:
+
 ```json
-{ "mcpServers": { "mockflow-wireframepro": { "url": "http://localhost:21194/mcp" } } }
+{
+  "mcpServers": {
+    "mockflow-wireframepro": {
+      "url": "http://localhost:21194/mcp"
+    }
+  }
+}
 ```
 
-### VS Code Copilot (`.vscode/mcp.json`)
+#### VS Code Copilot
+
+Create `.vscode/mcp.json` in your project:
+
 ```json
-{ "servers": { "mockflow-wireframepro": { "type": "http", "url": "http://localhost:21194/mcp" } } }
+{
+  "servers": {
+    "mockflow-wireframepro": {
+      "type": "http",
+      "url": "http://localhost:21194/mcp"
+    }
+  }
+}
 ```
 
-## Available Tools
+#### Codex (OpenAI)
+
+```bash
+codex mcp add mockflow-wireframepro http://localhost:21194/mcp
+```
+
+### 5. Start Prompting
+
+Ask your AI client:
+
+```
+"Create a wireframe for a login page with email, password, and social login"
+"Wireframe a dashboard with sidebar navigation, stats cards, and a data table"
+"Create a flowchart showing the user registration process"
+"Draw an AWS architecture diagram with API Gateway, Lambda, and DynamoDB"
+```
+
+The server creates the wireframe and returns a URL. Open it in your browser to view and edit.
+
+## Available Tools (3)
 
 | Tool | Input | Description |
 |------|-------|-------------|
@@ -71,38 +116,132 @@ claude mcp add --transport http -s user mockflow-wireframepro http://localhost:2
 
 ## How `render_wireframe` Works
 
-1. Claude Code generates a complete HTML page with inline styles
-2. MCP server loads the HTML in a headless browser (Puppeteer or Electron)
-3. `imageGenerator.min.js` (html2canvas fork) walks the DOM and extracts paint objects
-4. Paint objects are converted to WireframePro components (buttons, inputs, text, containers, etc.)
-5. Components appear on the canvas (desktop) or are saved as a project (CLI/remote)
-
-**Tips for best results:**
-- Use inline `style` attributes (no external CSS)
-- Use standard HTML elements (`div`, `h1-h6`, `p`, `input`, `button`, `table`, etc.)
-- Set explicit `width` on the outer container (e.g. `1280px`)
-- Include realistic placeholder text
-- Keep layouts clean and well-structured
-
-## Example Prompts
-
-- *"Create a wireframe for a login page with email, password, remember me, and social login"*
-- *"Design a dashboard wireframe with sidebar nav, stats cards, and a data table"*
-- *"Create a flowchart showing the user registration process"*
-- *"Draw an AWS architecture diagram with API Gateway, Lambda, DynamoDB, and S3"*
-- *"Wireframe an e-commerce product page with image gallery, price, and add to cart"*
-
-## CLI Options
-
-```bash
-mockflow-wireframepro-mcp                    # Default port 21194
-mockflow-wireframepro-mcp --port=8888        # Custom port
-mockflow-wireframepro-mcp login              # Set up credentials
-mockflow-wireframepro-mcp --help             # Show help
+```
+You: "Create a wireframe for a login page"
+  |
+  v
+AI Client (Claude Code / Cursor / VS Code)
+  |  generates complete HTML with inline CSS
+  v
+MCP Server (localhost:21194)
+  |  loads HTML in headless browser (Puppeteer)
+  |  runs imageGenerator → extracts paint objects
+  |  sends to MockFlow backend
+  v
+app.mockflow.com
+  |  creates WireframePro project with wireframe components
+  v
+Returns project URL → open in browser to view/edit
 ```
 
-## Debug Mode
+### HTML Tips for Best Results
+
+- Use inline `style` attributes (no external CSS)
+- Use standard HTML elements: `div`, `h1-h6`, `p`, `input`, `button`, `select`, `textarea`, `img`, `table`, `form`
+- Set explicit `width` on the outer container (e.g. `1280px`)
+- Include realistic placeholder text
+- Keep layouts clean with proper nesting
+
+## CLI Reference
+
+```bash
+mockflow-wireframepro-mcp                     # Start server on default port (21194)
+mockflow-wireframepro-mcp --port=8888         # Start on custom port
+mockflow-wireframepro-mcp login               # Authenticate with MockFlow (one-time)
+mockflow-wireframepro-mcp --help              # Show usage and setup instructions
+```
+
+## Configuration
+
+### Credentials
+
+Stored in `~/.mockflow/credentials.json` (created automatically by `mockflow-wireframepro-mcp login`):
+
+```json
+{
+  "access_token": "...",
+  "userid": "you@example.com",
+  "clientid": "your-client-id"
+}
+```
+
+### Custom Port
+
+If port 21194 is in use:
+
+```bash
+mockflow-wireframepro-mcp --port=8888
+```
+
+Then update your AI client config to use the new port.
+
+### Debug Mode
+
+For verbose logging:
 
 ```bash
 MCP_DEBUG=1 mockflow-wireframepro-mcp
 ```
+
+## Verify Installation
+
+```bash
+# Check server is running
+curl http://localhost:21194/mcp
+
+# List available tools
+curl -X POST http://localhost:21194/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'
+```
+
+## Troubleshooting
+
+### "No credentials found"
+
+Run `mockflow-wireframepro-mcp login` to authenticate with your MockFlow account.
+
+### Port already in use
+
+Another process is using port 21194. Either:
+- Use a different port: `mockflow-wireframepro-mcp --port=8888`
+- Kill the process: `lsof -ti :21194 | xargs kill`
+
+### AI client doesn't use WireframePro tools
+
+Be explicit in your prompt: *"Using mockflow-wireframepro, create a wireframe for..."*. AI clients have many tools and may default to generating code.
+
+### Tool call fails with backend error
+
+Ensure you have a valid login and internet connection. The server needs to reach `app.mockflow.com`. If your token expired, run `mockflow-wireframepro-mcp login` again.
+
+## Example Prompts
+
+### Wireframes
+```
+"Create a wireframe for a login page with email, password, remember me, and social login"
+"Wireframe a dashboard with sidebar nav, user avatar, stats cards, and a data table"
+"Create a wireframe for an e-commerce product page with image gallery, price, and add to cart"
+"Wireframe a settings page with profile photo, form fields, and save button"
+```
+
+### Flowcharts
+```
+"Create a flowchart showing the checkout process"
+"Create a UML class diagram for a blog system"
+"Create a circuit diagram with resistors and capacitors"
+```
+
+### Cloud Architecture
+```
+"Draw an AWS architecture with API Gateway, Lambda, DynamoDB, and S3"
+"Create an Azure architecture diagram for a web app with App Service and SQL Database"
+```
+
+## Contributing
+
+Issues and pull requests are welcome at [github.com/mockflow/wireframepro-mcp](https://github.com/mockflow/wireframepro-mcp).
+
+## License
+
+[MIT](LICENSE)
