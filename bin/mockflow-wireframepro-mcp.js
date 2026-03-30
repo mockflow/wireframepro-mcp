@@ -22,6 +22,7 @@ if (command === 'login') {
 	console.log('Usage:');
 	console.log('  mockflow-wireframepro-mcp                  Start local MCP server');
 	console.log('  mockflow-wireframepro-mcp --port=<number>  Start on custom port (default: 21194)');
+	console.log('  mockflow-wireframepro-mcp --space=<id>     Create projects in a specific design space');
 	console.log('  mockflow-wireframepro-mcp login            Set up credentials');
 	console.log('  mockflow-wireframepro-mcp --help           Show this help');
 	console.log('');
@@ -41,6 +42,7 @@ if (command === 'login') {
 	console.log('');
 } else {
 	var port = 21194;
+	var spaceId = null;
 	for (var i = 0; i < args.length; i++) {
 		if (args[i].indexOf('--port=') === 0) {
 			port = parseInt(args[i].split('=')[1], 10);
@@ -49,6 +51,9 @@ if (command === 'login') {
 				process.exit(1);
 			}
 		}
+		if (args[i].indexOf('--space=') === 0) {
+			spaceId = args[i].split('=')[1];
+		}
 	}
-	require('../lib/server').start(port);
+	require('../lib/server').start(port, { spaceId: spaceId });
 }
