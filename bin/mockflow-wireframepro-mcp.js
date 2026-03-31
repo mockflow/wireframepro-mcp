@@ -15,6 +15,11 @@ var command = args[0];
 
 if (command === 'login') {
 	require('../lib/auth').login();
+} else if (command === 'logout') {
+	console.log('');
+	console.log('To logout, remove your credentials file:');
+	console.log('  rm ~/.mockflow/credentials.json');
+	console.log('');
 } else if (command === '--help' || command === '-h' || command === 'help') {
 	console.log('');
 	console.log('MockFlow WireframePro MCP - Local MCP Server');
@@ -24,10 +29,11 @@ if (command === 'login') {
 	console.log('  mockflow-wireframepro-mcp --port=<number>  Start on custom port (default: 21194)');
 	console.log('  mockflow-wireframepro-mcp --space=<id>     Create projects in a specific design space');
 	console.log('  mockflow-wireframepro-mcp login            Set up credentials');
+	console.log('  mockflow-wireframepro-mcp logout           Show how to remove credentials');
 	console.log('  mockflow-wireframepro-mcp --help           Show this help');
 	console.log('');
 	console.log('Setup:');
-	console.log('  1. Run "mockflow-wireframepro-mcp login" (or "mockflow-mcp login")');
+	console.log('  1. Run "mockflow-wireframepro-mcp login"');
 	console.log('  2. Run "mockflow-wireframepro-mcp" to start the server');
 	console.log('  3. Add to your AI client:');
 	console.log('');
