@@ -2,14 +2,15 @@
  * MCP Handler for MockFlow WireframePro
  *
  * Handles:
- * - render_wireframe: HTML → Puppeteer + imageGenerator → paintObjects
- * - render_flowchart: Returns structured data for flowchart rendering
- * - render_cloudarchitecture: Returns structured data for cloud diagram rendering
+ * - render_wireframe: HTML → Puppeteer + imageGenerator → paintObjects → save project
+ * - render_flowchart: Proxy to Java backend
+ * - render_cloudarchitecture: Proxy to Java backend
  *
  * Tool definitions are loaded from wireframepro-mcp-component-registry.js
  */
 
 const { v4: uuidv4 } = require('uuid');
+const axios = require('axios');
 const puppeteer = require('puppeteer');
 const fs = require('fs');
 const path = require('path');
@@ -18,11 +19,16 @@ const WP_REGISTRY = require('./wireframepro-mcp-component-registry');
 const PROTOCOL_VERSION = '2025-03-26';
 const SERVER_NAME = 'MockFlow WireframePro';
 const SERVER_VERSION = '1.0.0';
+const BACKEND_URL = 'https://app.mockflow.com';
 
 class WireframeProMCPHandler {
 	constructor(isDev) {
 		this.sessions = new Map();
 		this.isDev = isDev;
+
+		this.renderBackendUrl = isDev
+			? 'http://localhost:8080/MockFlow-WireframePro'
+			: BACKEND_URL;
 
 		this.log = (typeof global !== 'undefined' && typeof global.logMessage === 'function')
 			? global.logMessage : console.log;
@@ -41,6 +47,7 @@ class WireframeProMCPHandler {
 		}
 
 		this.log('WireframePro MCP Handler initialized');
+		this.log('Backend: ' + this.renderBackendUrl);
 		this.log('imageGenerator.min.js: ' + (this.imageGeneratorPath ? 'found' : 'NOT FOUND'));
 	}
 
@@ -89,15 +96,12 @@ class WireframeProMCPHandler {
 
 		try {
 			if (name === 'render_wireframe') {
-				return await this.handleRenderWireframe(args);
+				return await this.handleRenderWireframe(args, req);
 			}
 
-			// Flowchart and cloud architecture — return structured data
+			// Flowchart and cloud architecture — proxy to backend
 			var actionType = name.replace('render_', '');
-			return {
-				content: [{ type: 'text', text: actionType + ' data generated with ' + (args.nodeDataArray ? args.nodeDataArray.length : 0) + ' nodes' }],
-				isError: false
-			};
+			return await this.callRenderBackend(actionType, args, req);
 		} catch (error) {
 			this.log('Tool call error: ' + error.message);
 			return {
@@ -108,10 +112,10 @@ class WireframeProMCPHandler {
 	}
 
 	/**
-	 * Convert HTML to wireframe paintObjects using Puppeteer + imageGenerator.
-	 * Same pattern as aitoolsManager.js:getElementPaintFromURL()
+	 * Convert HTML to wireframe paintObjects using Puppeteer + imageGenerator,
+	 * then save to backend as a WireframePro project.
 	 */
-	async handleRenderWireframe(args) {
+	async handleRenderWireframe(args, req) {
 		var html = args.html;
 		if (!html) throw new Error('HTML content is required');
 		if (!this.imageGeneratorPath) throw new Error('imageGenerator.min.js not found');
@@ -201,8 +205,13 @@ class WireframeProMCPHandler {
 
 			this.log('HTML converted to ' + paintObjects.length + ' paintObjects');
 
+			// Save paintObjects to backend as a WireframePro project
+			var user = (req && req.user) || null;
+			var result = await this.savePaintObjectsToProject(paintObjects, user);
+
 			return {
 				content: [
+					{ type: 'text', text: 'URL: ' + result.url },
 					{ type: 'text', text: 'Wireframe created with ' + paintObjects.length + ' components' }
 				],
 				isError: false
@@ -210,6 +219,69 @@ class WireframeProMCPHandler {
 		} finally {
 			await browser.close();
 		}
+	}
+
+	/**
+	 * Save paintObjects to a WireframePro project via backend.
+	 */
+	async savePaintObjectsToProject(paintObjects, user) {
+		var endpoint = this.renderBackendUrl + '/mcp/render_wireframe';
+
+		var payload = { paintObjects: paintObjects };
+		if (user) {
+			payload._oauth = { userid: user.userid, clientid: user.clientid, scope: user.scope };
+			if (user.spaceId) payload._spaceId = user.spaceId;
+		}
+
+		try {
+			var response = await axios.post(endpoint, payload, {
+				headers: { 'Content-Type': 'application/json; charset=utf-8' },
+				timeout: 60000
+			});
+
+			if (response.data && response.data.success) {
+				return { url: response.data.url, thumbnailUrl: response.data.thumbnailUrl };
+			}
+			throw new Error(response.data.error || 'Backend returned failure');
+		} catch (error) {
+			if (error.code === 'ECONNREFUSED') {
+				throw new Error('Cannot reach app.mockflow.com. Check your internet connection.');
+			}
+			if (error.response) {
+				throw new Error('Backend error: ' + error.response.status);
+			}
+			throw error;
+		}
+	}
+
+	/**
+	 * Proxy flowchart/cloudarchitecture to Java backend.
+	 */
+	async callRenderBackend(actionType, args, req) {
+		var endpoint = this.renderBackendUrl + '/mcp/render_' + actionType;
+		var payload = { ...args };
+
+		if (req && req.user) {
+			payload._oauth = { userid: req.user.userid, clientid: req.user.clientid, scope: req.user.scope };
+			if (req.user.spaceId) payload._spaceId = req.user.spaceId;
+		}
+
+		var response = await axios.post(endpoint, payload, {
+			headers: { 'Content-Type': 'application/json; charset=utf-8' },
+			timeout: 60000
+		});
+
+		var data = response.data;
+		if (data.success) {
+			return {
+				content: [
+					{ type: 'text', text: 'URL: ' + data.url },
+					{ type: 'text', text: 'Thumbnail: ' + data.thumbnailUrl }
+				],
+				isError: false
+			};
+		}
+		throw new Error(data.error || 'Backend returned failure');
 	}
 
 	/**

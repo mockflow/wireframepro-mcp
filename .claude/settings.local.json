@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -E \"\\\\.\\(ts|js|tsx|jsx\\)$\")",
+      "Bash(find /Users/pbaskaran/git/MockFlow-WireframePro -type f \\\\\\(-name *.ts -o -name *.js -o -name *.tsx -o -name *.jsx \\\\\\) ! -path */node_modules/* ! -path */.git/* ! -path */WebContent/js/external/*)",
+      "Bash(find /Users/pbaskaran/git/MockFlow-WireframePro -name *.java)",
+      "Bash(find /Users/pbaskaran/git/MockFlow-WireframePro/MockFlow-WireframePro/nodejs-server/ideaboard-mcp -type f -name *.ts -o -name *.js)",
+      "Bash(find /Users/pbaskaran/git/MockFlow-WireframePro/MockFlow-WireframePro/nodejs-server/wireframepro-mcp -type f -name *.ts -o -name *.js)",
+      "Bash(find /Users/pbaskaran/git/MockFlow-WireframePro/MockFlow-WireframePro/nodejs-server/editor -type f -name *.js)"
+    ]
+  }
+}
