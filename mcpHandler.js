@@ -129,7 +129,7 @@ class WireframeProMCPHandler {
 			await page.setViewport({ width: swidth, height: 1080, deviceScaleFactor: 1 });
 
 			// Load HTML content
-			await page.setContent(html, { waitUntil: 'networkidle2', timeout: 10000 });
+			await page.setContent(html, { waitUntil: 'domcontentloaded', timeout: 30000 });
 
 			// Get full page height and resize
 			var bodyHeight = await page.evaluate(function() {
