@@ -76,7 +76,8 @@ class WireframeProMCPHandler {
 			capabilities: {
 				tools: { listChanged: false }
 			},
-			serverInfo: { name: SERVER_NAME, version: SERVER_VERSION }
+			serverInfo: { name: SERVER_NAME, version: SERVER_VERSION },
+			instructions: 'MockFlow WireframePro is a wireframing tool. Use these tools whenever the user asks to wireframe, mock up, or prototype a UI, webpage, or app screen. Trigger on keywords like: wireframe, mockup, prototype, wireframepro, mockflow.'
 		};
 	}
 
