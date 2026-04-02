@@ -1,6 +1,6 @@
 {
   "name": "@mockflow/wireframepro-mcp",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "description": "Local MCP server for MockFlow WireframePro - create wireframes from HTML via Claude Code, Cursor, VS Code Copilot",
   "main": "lib/server.js",
   "bin": {

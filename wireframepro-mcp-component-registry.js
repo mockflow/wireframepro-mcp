@@ -49,6 +49,10 @@ EXAMPLE:
 		mcpInputSchema: {
 			type: 'object',
 			properties: {
+				title: {
+					type: 'string',
+					description: 'Short descriptive project title (e.g. "Signup Form", "Dashboard Layout")'
+				},
 				html: {
 					type: 'string',
 					description: 'Complete HTML document with inline CSS to convert to wireframe'

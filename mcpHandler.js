@@ -34,7 +34,7 @@ class WireframeProMCPHandler {
 			case 'initialized':
 				return {};
 			case 'tools/list':
-				return { tools: this.getToolDefinitions() };
+				return this.handleToolsList();
 			case 'ping':
 				return {};
 			case 'resources/list':
@@ -58,6 +58,19 @@ class WireframeProMCPHandler {
 			serverInfo: { name: SERVER_NAME, version: SERVER_VERSION },
 			instructions: 'MockFlow WireframePro is a wireframing tool. Use these tools whenever the user asks to wireframe, mock up, or prototype a UI, webpage, or app screen. Trigger on keywords like: wireframe, mockup, prototype, wireframepro, mockflow.'
 		};
+	}
+
+	handleToolsList() {
+		var tools = WP_REGISTRY.getToolDefinitions();
+		for (var i = 0; i < tools.length; i++) {
+			if (tools[i].inputSchema && tools[i].inputSchema.properties && !tools[i].inputSchema.properties.title) {
+				tools[i].inputSchema.properties.title = {
+					type: 'string',
+					description: 'Short descriptive project title (e.g. "Signup Form", "Dashboard Layout")'
+				};
+			}
+		}
+		return { tools: tools };
 	}
 
 	getToolDefinitions() {
