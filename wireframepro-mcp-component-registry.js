@@ -25,27 +25,26 @@ var WIREFRAMEPRO_MCP_REGISTRY = [
 Provide a complete HTML document with inline CSS styles. The HTML will be rendered and automatically converted to editable wireframe components on the canvas.
 
 IMPORTANT RULES:
-- Use inline styles (style attribute) for all styling — no external stylesheets
+- Always return a complete HTML document with proper <html>, <head>, and <body> tags
+- Use inline styles (style attribute) for all styling — no external stylesheets or CDN scripts
 - Use standard HTML elements: div, h1-h6, p, input, button, select, textarea, img, ul, li, table, form
 - Include realistic placeholder text and content
 - Set explicit widths and heights where possible
 - Use a clean, structured layout with proper nesting
 - The HTML should represent a single page/screen design
-- Wrap everything in a container div with explicit width (e.g. 1280px) and background color
+- Do not use inline SVG code — use <img> tags instead
+- Minimize HTML comments and hidden DOM elements to keep output concise
+- Size sections appropriately for their content — avoid excessively tall empty sections
 
-EXAMPLE:
-<html><body style="margin:0;padding:0">
-<div style="width:1280px;background:#fff;font-family:Arial,sans-serif">
-  <header style="background:#2563eb;color:#fff;padding:20px 40px;display:flex;justify-content:space-between;align-items:center">
-    <h1 style="margin:0;font-size:24px">AppName</h1>
-    <nav><a style="color:#fff;margin-left:20px;text-decoration:none">Home</a></nav>
-  </header>
-  <main style="padding:40px">
-    <h2>Welcome</h2>
-    <p>Some content here</p>
-  </main>
-</div>
-</body></html>`,
+PAGE BACKGROUND: Determine the appropriate page background color based on the design context. For dark themes, set it on <body> (e.g. <body style="background-color:#141414">). For light/white UIs, omit the body background. Do NOT add background styling to an outermost wrapper div.
+
+IMAGE PLACEHOLDERS: Do NOT use real image URLs or stock photos. For image placeholders (product photos, avatars, thumbnails, gallery images), use <img> tags with src='placeholder' and a visible border with appropriate color (e.g. <img src='placeholder' style='width:300px;height:200px;border:1px solid #ccc;'>). For full-width background sections (hero backgrounds, banners), use colored div elements instead.
+
+MOBILE APPS: For mobile app designs, constrain the layout width to 375px and use a single-column layout appropriate for phone screens. Set the outermost container to width:375px. The wireframe tool will automatically wrap it in a phone device frame, so ensure the content has adequate top padding.
+
+NO DEVICE FRAMES: Generate only the UI content. Do NOT include phone frames, laptop frames, browser chrome, or device mockup containers. The tool adds device frames automatically for mobile.
+
+NO FIXED/STICKY POSITIONING: Do NOT use position:fixed or position:sticky. All elements must use static or relative positioning.`,
 		mcpInputSchema: {
 			type: 'object',
 			properties: {
@@ -56,6 +55,11 @@ EXAMPLE:
 				html: {
 					type: 'string',
 					description: 'Complete HTML document with inline CSS to convert to wireframe'
+				},
+				apptype: {
+					type: 'string',
+					enum: ['web', 'mobile'],
+					description: 'Target platform. Use "mobile" for phone app screens (adds device frame, constrains to mobile viewport). Defaults to "web".'
 				}
 			},
 			required: ['html']
@@ -68,7 +72,8 @@ EXAMPLE:
 		clientPrompt: 'wireframe from HTML',
 		clientPromptField: null,
 		clientIsHtmlConversion: true,  // signals MCP server to use htmlToPaintObjects flow
-		clientTransform: null
+		clientTransform: null,
+		recipeOutputKeys: ['wireframe', 'mockup', 'prototype', 'ui', 'screen', 'layout']
 	},
 
 	// ========================================================================
@@ -133,7 +138,8 @@ STRUCTURE: diagramType="flowchart", class="GraphLinksModel", category required.`
 		clientPrompt: 'default',
 		clientPromptField: 'category',
 		clientIsHtmlConversion: false,
-		clientTransform: null
+		clientTransform: null,
+		recipeOutputKeys: ['flowchart', 'sequencediagram', 'diagram']
 	},
 
 	// ========================================================================
@@ -186,7 +192,53 @@ LINK PROPERTIES:
 		clientPrompt: 'aws',
 		clientPromptField: 'diagramType',
 		clientIsHtmlConversion: false,
-		clientTransform: null
+		clientTransform: null,
+		recipeOutputKeys: ['cloudarchitecture', 'aws', 'azure', 'gcloud', 'cisco']
+	},
+
+	// ========================================================================
+	// read_wireframe — Analyze/extract data from existing wireframe
+	// ========================================================================
+	{
+		mcpToolName: 'read_wireframe',
+		mcpDescription: `Analyze an existing wireframe in MockFlow WireframePro and extract structured information.
+
+Use this tool to read, analyze, or extract data from a wireframe design. This enables skills like:
+- Generating PRD (Product Requirements Document) from a wireframe
+- Performing accessibility audits
+- Extracting color palettes and design tokens
+- Converting wireframe to user stories
+- Analyzing UI patterns and component usage
+
+The tool reads the currently selected wireframe page and returns structured component data including layout positions, text content, colors, fonts, component types, and hierarchy.
+
+INPUT: Provide a natural language description of what you want to analyze or extract from the wireframe.
+
+OUTPUT: Returns JSON with wireframe component data that can be analyzed according to the analysis instructions.`,
+		mcpInputSchema: {
+			type: 'object',
+			properties: {
+				prompt: {
+					type: 'string',
+					description: 'Description of what to analyze or extract from the wireframe (e.g., "Generate a PRD", "Audit accessibility", "Extract color palette")'
+				},
+				analysisType: {
+					type: 'string',
+					enum: ['prd', 'accessibility', 'designtokens', 'userstories', 'general'],
+					description: 'Type of analysis to perform. Defaults to "general".'
+				}
+			},
+			required: ['prompt']
+		},
+
+		clientAitype: 'readwireframe',
+		clientComp: null,
+		clientDataField: null,
+		clientPrompt: 'analyze wireframe',
+		clientPromptField: null,
+		clientIsHtmlConversion: false,
+		clientTransform: null,
+		recipeOutputKeys: ['read_wireframe', 'prd', 'audit', 'analysis', 'userstories', 'designtokens']
 	}
 
 ];
@@ -242,6 +294,20 @@ WIREFRAMEPRO_MCP_REGISTRY.mapToolToGdata = function(toolName, args) {
 	}
 
 	return gdata;
+};
+
+// Helper: build recipe outputType → MCP tool name map (for Agent Skill download)
+WIREFRAMEPRO_MCP_REGISTRY.buildRecipeToToolMap = function() {
+	var map = {};
+	for (var i = 0; i < this.length; i++) {
+		var entry = this[i];
+		if (entry.recipeOutputKeys) {
+			for (var j = 0; j < entry.recipeOutputKeys.length; j++) {
+				map[entry.recipeOutputKeys[j]] = entry.mcpToolName;
+			}
+		}
+	}
+	return map;
 };
 
 module.exports = WIREFRAMEPRO_MCP_REGISTRY;
