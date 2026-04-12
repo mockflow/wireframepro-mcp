@@ -44,7 +44,9 @@ MOBILE APPS: For mobile app designs, constrain the layout width to 375px and use
 
 NO DEVICE FRAMES: Generate only the UI content. Do NOT include phone frames, laptop frames, browser chrome, or device mockup containers. The tool adds device frames automatically for mobile.
 
-NO FIXED/STICKY POSITIONING: Do NOT use position:fixed or position:sticky. All elements must use static or relative positioning.`,
+NO FIXED/STICKY POSITIONING: Do NOT use position:fixed or position:sticky. All elements must use static or relative positioning.
+
+STYLE: If the user asks for a sketchy, hand-drawn, rough, or low-fidelity wireframe, set "style" to "sketchy". The tool will substitute hand-drawn components automatically. Otherwise use "default".`,
 		mcpInputSchema: {
 			type: 'object',
 			properties: {
@@ -60,6 +62,11 @@ NO FIXED/STICKY POSITIONING: Do NOT use position:fixed or position:sticky. All e
 					type: 'string',
 					enum: ['web', 'mobile'],
 					description: 'Target platform. Use "mobile" for phone app screens (adds device frame, constrains to mobile viewport). Defaults to "web".'
+				},
+				style: {
+					type: 'string',
+					enum: ['default', 'sketchy'],
+					description: 'Visual style. Use "sketchy" when the user asks for a sketchy / hand-drawn / rough / low-fidelity wireframe. Defaults to "default".'
 				}
 			},
 			required: ['html']
