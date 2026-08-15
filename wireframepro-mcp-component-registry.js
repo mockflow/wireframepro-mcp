@@ -42,6 +42,8 @@ IMAGE PLACEHOLDERS: Do NOT use real image URLs or stock photos. For image placeh
 
 MOBILE APPS: For mobile app designs, constrain the layout width to 375px and use a single-column layout appropriate for phone screens. Set the outermost container to width:375px. The wireframe tool will automatically wrap it in a phone device frame, so ensure the content has adequate top padding.
 
+MATCHING AN EXISTING DESIGN (create-similar): When the user asks for a NEW screen that belongs to an app/design already in the editor ("another screen for this app", "a profile page matching this one"), FIRST call read_wireframe, then reproduce its design system exactly so the two screens are unmistakably the same product: the SAME brand/app name used VERBATIM (never invent a new one), the SAME icon files for the same purposes (including the brand logo mark next to the app name — never replace it with a generic circle or initial), the SAME colors, fonts, header/nav/footer chrome, and the SAME content width. ONLY the main content is new. If the existing screens are mobile phone screens, build at mobile width so the device frame matches.
+
 NO DEVICE FRAMES: Generate only the UI content. Do NOT include phone frames, laptop frames, browser chrome, or device mockup containers. The tool adds device frames automatically for mobile.
 
 NO FIXED/STICKY POSITIONING: Do NOT use position:fixed or position:sticky. All elements must use static or relative positioning.
@@ -221,7 +223,9 @@ The tool reads the currently selected wireframe page and returns structured comp
 
 INPUT: Provide a natural language description of what you want to analyze or extract from the wireframe.
 
-OUTPUT: Returns JSON with wireframe component data that can be analyzed according to the analysis instructions.`,
+OUTPUT: Returns JSON with wireframe component data that can be analyzed according to the analysis instructions.
+
+Also call this BEFORE render_wireframe whenever a new screen must match a design already in the editor (create-similar): the returned components tell you the existing brand name, icon files, colors, fonts and content width to reproduce.`,
 		mcpInputSchema: {
 			type: 'object',
 			properties: {
