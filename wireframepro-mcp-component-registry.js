@@ -156,43 +156,50 @@ STRUCTURE: diagramType="flowchart", class="GraphLinksModel", category required.`
 	// ========================================================================
 	{
 		mcpToolName: 'render_cloudarchitecture',
-		mcpDescription: `Create cloud architecture diagrams (AWS, Azure, GCP, Cisco) in MockFlow WireframePro.
+		mcpDescription: `Create cloud/software system architecture diagrams — backend, microservices, deployment, infrastructure, integration or network architecture — for AWS, Azure, GCP, Kubernetes, SAP, or generic systems (use "aws" icons when no provider is named).
 
-NODE PROPERTIES:
-- key: Unique string ID
-- text: Service name (use \\n for multiline)
-- type: Service type string
-- color: Hex color
-- fillColor: Background color (for groups)
-- loc: Position as "x y" string
-- width/height: Dimensions
-- isGroup: true for container groups (VPC, subnet)
-- group: Parent group key
+CRITICAL FORMAT RULES (topology only — a deterministic layout engine computes ALL geometry):
+- diagramType picks the icon set: "aws", "azure", "gcloud", "kubernetes", "sap", "sapbtp", "oracle", or "cisco"
+- Service nodes: key, text (short display label), matchKey, type, and group when inside a section. NO loc/width/height/shape/colors on service nodes — positions, sizes and routes are computed.
+- matchKey resolves the provider icon: the official service name in lowercase alphanumeric with NO vendor prefix — "route53", "s3", "ec2", "elasticloadbalancing" (ALB/ELB), "elasticcontainerservice", "lambda", "cloudfront", "aurora", "users", "internetgateway". When unsure, join the full official service name words. For Kubernetes diagrams, matchKey uses the standard k8s resource short names ("pod", "svc", "ing", "deploy", "sts", "ds", "cm", "ns", "pv", "pvc", "hpa", "sa", "netpol", "secret", "node", "etcd", "kubelet").
+- Groups: key, isGroup: true, text, color, fillColor, fontColor, and group when nested. NO loc/width/height — groups are sized around their children.
+- Links: from, to, optional short text label ("Failover", "HTTPS"). NO fromSpot/toSpot — routing is computed.
+- Declare nodes in reading order (entry points first, data stores last); the engine follows declaration order for left-to-right flow.
 
-LINK PROPERTIES:
-- from/to: Node keys
-- fromSpot/toSpot: "Top", "Bottom", "Left", "Right"
-- text: Connection label ("HTTPS", "SQL")`,
+RESTRAINT (this is what makes the diagram good):
+- Draw ONLY what the user's description calls for. No padding with extra services, VPC/subnet wrappers, availability zones, or monitoring add-ons unless asked; NEVER add a legend group.
+- Prefer roughly 6-14 nodes and at most 2 levels of group nesting; group by the boundaries the user talks about (regions, tiers, clusters), not by a template.
+
+GROUP COLORS (CRITICAL): ALL group/section backgrounds MUST be white ("fillColor": "#FFFFFF") — no tinted section fills; this is the same look the in-app generator ships. The section's brand color goes on "color" (border) and "fontColor" (title), e.g. AWS Cloud #FF9900, VPC #232F3E, Public Subnet #3F8624, Private Subnet #D13212, Data Subnet #3B48CC; Azure Cloud #0078D4, VNet #004578; GCP Cloud #4285F4, VPC #34A853; Kubernetes Cluster #326CE5, Control Plane #1A3A6B; SAP BTP #0070F2.
+`,
 		mcpInputSchema: {
 			type: 'object',
 			properties: {
+				title: {
+					type: 'string',
+					description: 'A short title for the diagram, shown as the frame header (e.g. "AWS Web App Architecture").'
+				},
 				diagramType: {
 					type: 'string',
-					enum: ['aws', 'azure', 'gcloud', 'cisco'],
-					description: 'Cloud provider type'
+					enum: ['aws', 'azure', 'gcloud', 'kubernetes', 'sap', 'sapbtp', 'oracle', 'cisco'],
+					description: 'Cloud provider / platform — picks the icon set the client renders with. Default "aws" when the request names no provider.'
+				},
+				class: {
+					type: 'string',
+					description: "GoJS model class, typically 'GraphLinksModel'"
 				},
 				nodeDataArray: {
 					type: 'array',
 					items: { type: 'object' },
-					description: 'Array of node/service objects'
+					description: 'Cloud components and groups. Each node: key (string), text, type, color, fillColor (for groups), loc ("x y"), width, height, shape, isGroup (true for containers), group (parent group key)'
 				},
 				linkDataArray: {
 					type: 'array',
 					items: { type: 'object' },
-					description: 'Array of connection objects'
+					description: 'Connections: from, to (node keys), fromSpot/toSpot ("Top"/"Bottom"/"Left"/"Right"), text (label like "HTTPS", "SQL")'
 				}
 			},
-			required: ['diagramType', 'nodeDataArray', 'linkDataArray']
+			required: ['diagramType', 'nodeDataArray']
 		},
 
 		clientAitype: 'gencloudarchitecture',
